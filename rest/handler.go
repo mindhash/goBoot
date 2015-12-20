@@ -4,6 +4,7 @@ package rest
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/base64"
 	"expvar"
 	"fmt"
 	"io"
@@ -11,17 +12,17 @@ import (
 	"mime"
 	//"mime/multipart"
 	"net/http"
-	//"net/url"
+	"net/url"
 	//"os"
 	//"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
-	//"github.com/gorilla/mux"
+	"github.com/gorilla/mux"
  
-	"github.com/mindhash/goBackend/base"
-	"github.com/mindhash/goBackend/db"
-	//"github.com/mindhash/goBackend/auth"
+	"github.com/mindhash/goBoot/base"
+	"github.com/mindhash/goBoot/db"
+	 "github.com/mindhash/goBoot/auth"
 )
 
 var kNotFoundError = base.HTTPErrorf(http.StatusNotFound, "missing")
@@ -31,7 +32,7 @@ var kBadRequestError = base.HTTPErrorf(http.StatusMethodNotAllowed, "Bad Request
 // If set to true, JSON output will be pretty-printed.
 var PrettyPrint bool = false
 
-var restExpvars = expvar.NewMap("gobackend_rest")
+var restExpvars = expvar.NewMap("goboot_rest")
 
 var lastSerialNum uint64 = 0
 
@@ -44,7 +45,7 @@ type handler struct {
 	statusMessage  string
 	requestBody    io.ReadCloser
 	//To Do:db             *db.Database
-	//To Do:user           auth.User
+	 user           auth.User
 	privs          handlerPrivs
 	startTime      time.Time
 	serialNumber   uint64
@@ -99,7 +100,26 @@ func (h *handler) invoke(method handlerMethod) error {
 	default:
 		return base.HTTPErrorf(http.StatusUnsupportedMediaType, "Unsupported Content-Encoding;")
 	}
+
+	h.setHeader("Server", VersionString)
+
+	//To Do: If there is a "db" path variable, look up the database context:
+	var dbc *db.DatabaseContext
+    dbc, err := h.server.GetDatabase();
+
+	if err != nil {
+			h.logRequestLine()
+			return err
+	}
 	
+	
+	// Authenticate, if not on admin port:
+	if h.privs != adminPrivs {
+		if err := h.checkAuth(dbc); err != nil {  
+			h.logRequestLine()
+			return err
+		}
+	}
 	
 	h.logRequestLine()
 
@@ -301,4 +321,55 @@ func (h *handler) readObject(obj interface{}) ( interface{}, error){
 	default:
 		return nil, base.HTTPErrorf(http.StatusUnsupportedMediaType, "Invalid content type %s", contentType)
 	}
+}
+
+
+func (h *handler) checkAuth(context *db.DatabaseContext) error {
+	h.user = nil
+	
+	//if context == nil {
+	//	return nil
+	//}
+
+	if userName, password := h.getBasicAuth(); userName != "" {
+		h.user = context.Authstore().AuthenticateUser(userName, password)
+		if h.user == nil {
+			base.Logf("HTTP auth failed for username=%q", userName)
+			h.response.Header().Set("WWW-Authenticate", `Basic realm="Couchbase Sync Gateway"`)
+			return base.HTTPErrorf(http.StatusUnauthorized, "Invalid login")
+		}
+		return nil
+	}
+
+	return nil
+}
+
+func (h *handler) getBasicAuth() (username string, password string) {
+	auth := h.rq.Header.Get("Authorization")
+	if strings.HasPrefix(auth, "Basic ") {
+		decoded, err := base64.StdEncoding.DecodeString(auth[6:])
+		if err == nil {
+			components := strings.SplitN(string(decoded), ":", 2)
+			if len(components) == 2 {
+				return components[0], components[1]
+			}
+		}
+	}
+	return
+}
+
+func (h *handler) PathVar(name string) string {
+	v := mux.Vars(h.rq)[name]
+
+	//Escape special chars i.e. '+' otherwise they are removed by QueryUnescape()
+	v = strings.Replace(v, "+", "%2B", -1)
+
+	// Before routing the URL we explicitly disabled expansion of %-escapes in the path
+	// (see function fixQuotedSlashes). So we have to unescape them now.
+	v, _ = url.QueryUnescape(v)
+	return v
+}
+
+func (h *handler) SetPathVar(name string, value string) {
+	mux.Vars(h.rq)[name] = url.QueryEscape(value)
 }

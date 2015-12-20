@@ -9,9 +9,11 @@ const VersionNumber float64 = 1.0                    // API/feature level
 
 
 var LongVersionString string
+var VersionString string
 
 func init(){
 	LongVersionString = fmt.Sprintf("%s/unofficial", ServerName)
+	VersionString = fmt.Sprintf("%s/%s", ServerName)
 }
 
 // HTTP handler for the root ("/")

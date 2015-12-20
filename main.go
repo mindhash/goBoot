@@ -1,7 +1,7 @@
 package main
 
 import ( 
-	"github.com/mindhash/goBackend/rest"
+	"github.com/mindhash/goBoot/rest"
 	)
 
 

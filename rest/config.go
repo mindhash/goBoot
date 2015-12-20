@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"flag"
-	"github.com/mindhash/goBackend/base"
+	"github.com/mindhash/goBoot/base"
 )
 
 var config *ServerConfig
@@ -25,22 +25,29 @@ type ServerConfig struct {
 	Pretty						   bool
 	//Log                            []string        // Log keywords to enable
 	//LogFilePath                    *string         // Path to log file, if missing write to stderr 
-	Database                      *DbConfig     // Pre-configured databases, mapped by name
+	DatabaseSpec                      *DbConfig     // Pre-configured databases, mapped by name
 	MaxIncomingConnections 		   *int            // Max # of incoming HTTP connections to accept
 }
 
 
 type DbConfig struct {
-	Name               string  
+	Name string
+	Host string 
+	User string 
+	Password string	
 }
 
 func ParseCommandLine() {
 	dbname := flag.String("dbname","sampledb","Default Database Name")
+	dbhost := flag.String("dbhost","127.0.0.1"," Defualt Database Host")
+	dbuser := flag.String("dbuser","scott","Default Database User")
+	dbpwd := flag.String("dbpwd","tiger","Default Database Password")
+	
 	addr   := flag.String("addr","localhost:4984","HTTP Server Address") 
 	pretty := flag.Bool("pretty", true, "Pretty-print JSON responses")
 	flag.Parse()
 	
-	config = &ServerConfig { Interface: addr, Pretty: *pretty,Database: &DbConfig {Name: *dbname}}
+	config = &ServerConfig { Interface: addr, Pretty: *pretty,DatabaseSpec: &DbConfig {Name: *dbname, Host: *dbhost, User: *dbuser, Password: *dbpwd}}
 }
 
 func (config *ServerConfig) serve(addr string, handler http.Handler) {
@@ -62,11 +69,11 @@ func RunServer(config *ServerConfig) {
 	sc := NewServerContext(config)
 	
 	//Open Database and add to server context 
-	//if _, err := sc.AddDatabaseFromConfig(config.Database); err != nil {
-	//		base.LogFatal("Error opening database: %v", err)
-	//}
+	if _, err := sc.AddDatabaseFromConfig(config.DatabaseSpec); err != nil {
+			base.LogFatal("Error opening database: %v", err)
+	}
 		
-	//defer sc.CloseDatabase()
+	defer sc.CloseDatabase()
 	
 	base.Logf("Starting server on %s ...", *config.Interface)
 	config.serve(*config.Interface, CreatePublicHandler(sc))
