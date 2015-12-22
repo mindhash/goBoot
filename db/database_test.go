@@ -5,16 +5,26 @@ import ("testing"
 		"runtime"
 		"strings"
 		"fmt"
-		"encoding/json"
-		"github.com/mindhash/go.assert"
+	//	"encoding/json"
+	//	"github.com/mindhash/go.assert"
 		"github.com/mindhash/goBoot/base"
+		"gopkg.in/mgo.v2/bson"
 )
  
+const (
+	_dbserver string = "127.0.0.1"
+	_dbname string = "test"
+)
 
+type  user struct {
+	Name string
+	Email string
+	Active bool
+}
 
 func setupTestDB(t *testing.T) *DatabaseContext {
 	dstore,err := ConnectToDataStore(base.DStoreSpec{
-		hostaddr: "127.0.0.1", database:"TestDB", dbuser:"", dbpwd:""
+		Hostaddr: _dbserver, Dbname:_dbname,
  		})
 	 
 	if err != nil {
@@ -36,22 +46,54 @@ func TestDatabase(t *testing.T) {
 
 	
 	log.Printf("Create test data...")
-	body := Body{"id": "value1", "key2": 1234}
+	 body := bson.M{"name": "unknown", "data": "1234"}
 	
-	 err := db.DataStore.Insert("FirstTable",&body)
+	 err := db.Datastore.Insert("mytable",&body)
 	assertNoError(t, err, "Couldn't insert data ")
-	log.Printf("Inserted data successfully..", &body)
-	body1 := Body{}
+	log.Printf("Inserted data successfully..")
+
+	//body1 := Body{}
 	
-	log.Printf("Retrieve data...")
-	doc,err := db.GetDoc(docid1)
-    err= FindAll ("FirstTable", key string, &body1  )   
-	assertNoError(t, err, "Couldn't get Doc Body")
-	log.Printf("Retrieved data successfully..", &body1)
+	//log.Printf("Retrieve data...")
+	//doc,err := db.GetDoc(docid1)
+    
+    //err= FindAll ("FirstTable", key string, &body1  )
+
+	//assertNoError(t, err, "Couldn't get Doc Body")
+	//log.Printf("Retrieved data successfully..", &body1)
 	 
-	assert.DeepEquals(t, body1, body) 
+	//assert.DeepEquals(t, body1, body) 
 
 }
+
+func TestObjectDML(t *testing.T) {
+	db := setupTestDB(t)
+	defer tearDownTestDB(t, db)
+
+	
+	log.Printf("Create User test data...")
+	 u:= &user {"Moak","None",true}
+	err := db.Datastore.Insert("users",u)
+
+
+	assertNoError(t, err, "Couldn't insert data ")
+	log.Printf("Inserted User successfully..")
+
+	//body1 := Body{}
+	
+	//log.Printf("Retrieve data...")
+	//doc,err := db.GetDoc(docid1)
+    
+    //err= FindAll ("FirstTable", key string, &body1  )
+
+	//assertNoError(t, err, "Couldn't get Doc Body")
+	//log.Printf("Retrieved data successfully..", &body1)
+	 
+	//assert.DeepEquals(t, body1, body) 
+
+}
+
+
 
 //////// HELPERS:
 
