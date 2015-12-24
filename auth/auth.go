@@ -6,13 +6,13 @@ import (
 
 //Data store that stores user info
 type Authstore struct {
-	datastore base.Datastore	 
+	bucket base.Datastore	 
 }
 
 // Creates a new Authenticator that stores user info  
-func NewAuthstore(datastore base.Datastore) *Authstore {
+func NewAuthstore(bucket base.Datastore) *Authstore {
 	return &Authstore{ 
-		datastore,
+		bucket,
 	}
 }
 
@@ -36,25 +36,67 @@ func (auth *Authstore) GetUser(name string) (User, error) {
 	return princ.(User), err
 }
 
+func (auth *Authstore) getPrincipal(name string, factory func() Principal) (Principal, error) {
+	var princ Principal
 
+	princ := factory()
 
+	err:= auth.bucket.FindByvalue("principals", bson.M{"Name_":name}, princ)
 
-func (auth *Authstore) getPrincipal(docID string, factory func() Principal) (Principal, error) {
-	return nil, nil
+	if (err!=nil) {
+		return nil, err	
+	}
+
+	return princ, nil
 }
 
 // Looks up a User by email address.
 func (auth *Authstore) GetUserByEmail(email string) (User, error) {
-	return nil, nil
+	
+	user := &userImpl{}
+	//derive user by email
+	err := auth.bucket.FindByValue("principals",bson.M{"Email_": email},user)
+	if (err!=nil){
+		return nil, err
+	}
+
+	return user, nil 
 }
 
 
 // Saves the information for a user/role.
 func (auth *Authstore) Save(p Principal) error {
-return nil
+
+	if err:= p.validate(); err != nil {
+		return err
+	}
+
+	if user, ok := p.(User); ok {
+		//fail if user email already registered 
+		if user.Email() != "" {
+			userByEmailInfo :=  auth.GetUserByEmail(user.Email())
+			if err != nil {
+				return err
+			}
+			if (userByEmailInfo.Name() != user.Name()) {
+					//raise error 
+				return errors.New("User email already registered")
+			}
+		}
+	}
+
+	err = auth.bucket.Insert ("principals", &p)
+	if err != nil {
+		return err
+	}
+
+
+	//base.LogTo("Auth", "Saved %s: %s", p._id, data)
+	return nil  
+
 }
 
-// Deletes a user/role.
+// Deletes a user/role. To Do
 func (auth *Authstore) Delete(p Principal) error {
 	return nil
 }
